@@ -60,7 +60,7 @@ export default function Landing() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your Gmail address to get started"
             required
-            className="flex-1 h-12 px-4 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow text-sm"
+            className="flex-1 h-12 px-4 rounded-lg bg-secondary border border-border text-white placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow text-sm"
           />
           <button
             type="submit"
