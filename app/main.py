@@ -76,14 +76,25 @@ polling_state_lock = threading.Lock()
 polling_thread: Optional[threading.Thread] = None
 polling_stop_event = threading.Event()
 
-# Keyword heuristics (MVP)
+# Keyword heuristics (MVP) - expanded for better matching
 SCHEDULING_KEYWORDS = [
     "available",
-    "free",
+    "free", 
     "schedule",
     "meet",
+    "meeting",
     "availability",
     "time slot",
+    "tomorrow",
+    "today",
+    "time",
+    "when",
+    "can we",
+    "let's",
+    "lets",
+    "appointment",
+    "call",
+    "discussion",
 ]
 UPDATE_KEYWORDS = [
     "update",
@@ -186,6 +197,7 @@ def _poll_loop() -> None:
         )
 
     while not polling_stop_event.is_set():
+        print("Polling loop tick - checking Gmail...")
         with polling_state_lock:
             polling_state["last_checked"] = _now_ist_iso()
 
@@ -197,8 +209,12 @@ def _poll_loop() -> None:
                 except Exception:
                     assistant_email = None
 
-            unread_ids = gmail.list_unread_message_ids(max_results=10)
+            # Get messages from last 24 hours (not just unread)
+            message_ids = gmail.list_messages(max_results=10)
+            print(f"Found {len(message_ids)} messages to check")
+            
         except Exception as e:
+            print(f"ERROR in polling loop: {e}")
             _log(
                 message_id=None,
                 subject=None,
@@ -209,7 +225,7 @@ def _poll_loop() -> None:
             time.sleep(60)
             continue
 
-        for message_id in unread_ids:
+        for message_id in message_ids:
             if polling_stop_event.is_set():
                 break
 
@@ -220,9 +236,16 @@ def _poll_loop() -> None:
                 original = gmail.get_message_full(message_id)
                 subject = original.subject
                 full_text = f"{original.subject}\n{original.from_email}\n{original.body_text}"
-
+                
+                print(f"Found email: {subject} - checking keywords")
+                
                 # Scheduling request
-                if detect_scheduling_request(full_text):
+                scheduling_match = detect_scheduling_request(full_text)
+                update_match = detect_update_request(full_text)
+                
+                print(f"Keywords - Scheduling: {scheduling_match}, Update: {update_match}")
+                
+                if scheduling_match:
                     action_taken = "scheduling"
                     status = "success"
 
@@ -236,14 +259,6 @@ def _poll_loop() -> None:
                             action_taken=action_taken,
                             status=status,
                             details="No availability intervals found in email body.",
-                        )
-                        record_processed_email(
-                            db_path,
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            processed_at=datetime.now(IST_TZ),
                         )
                         continue
 
@@ -353,7 +368,7 @@ def _poll_loop() -> None:
                     )
 
                 # Update request
-                elif detect_update_request(full_text):
+                elif update_match:
                     action_taken = "update"
                     status = "success"
 
@@ -387,6 +402,7 @@ def _poll_loop() -> None:
                 else:
                     action_taken = "ignored"
                     status = "skipped"
+                    print(f"Ignoring email: {subject} - no keywords matched")
                     _log(
                         message_id=message_id,
                         subject=subject,
@@ -422,6 +438,7 @@ def _poll_loop() -> None:
                     polling_state["last_email_subject"] = subject
 
             except Exception as e:
+                print(f"ERROR processing message {message_id}: {e}")
                 _log(
                     message_id=message_id,
                     subject=None,
@@ -625,7 +642,7 @@ def status():
         last_subject = get_last_email_subject(db_path)
 
     return {
-        "is_polling": polling_state["is_polling"],
+        "is_polling": polling_active,
         "last_checked": polling_state["last_checked"],
         "emails_processed_today": emails_processed_today,
         "last_email_subject": last_subject,
