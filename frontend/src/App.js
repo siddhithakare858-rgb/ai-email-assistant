@@ -159,7 +159,7 @@ export default function App() {
         />
         
         {/* Animated Particles Background */}
-        <div className="particles">
+        <div className="particles" style={{ pointerEvents: 'none' }}>
           <div className="particle"></div>
           <div className="particle"></div>
           <div className="particle"></div>
@@ -203,7 +203,12 @@ export default function App() {
                     type="email"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full px-5 py-4 text-lg glassmorphism rounded-xl text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all interactive-input"
+                    className="w-full px-5 py-4 text-lg rounded-xl transition-all interactive-input"
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: 'white'
+                    }}
                     placeholder="you@gmail.com"
                     autoComplete="off"
                   />
