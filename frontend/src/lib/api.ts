@@ -1,4 +1,4 @@
-const BASE_URL = "https://ai-email-assistant-hhqz.onrender.com";
+const BASE_URL = window.location.hostname === "localhost" ? "http://localhost:8000" : "https://ai-email-assistant-hhqz.onrender.com";
 
 export interface Status {
   is_polling: boolean;
@@ -7,12 +7,27 @@ export interface Status {
   last_email_subject: string;
 }
 
+export interface Stats {
+  total_received: number;
+  total_sent: number;
+  unread_count: number;
+}
+
 export interface LogEntry {
   message_id: string;
   subject: string;
   processed_at: string;
   action_taken: string;
   status: string;
+  details?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: { dateTime: string };
+  end: { dateTime: string };
+  htmlLink: string;
 }
 
 export interface ProcessRequest {
@@ -26,9 +41,27 @@ export async function fetchStatus(): Promise<Status> {
   return res.json();
 }
 
+export async function fetchStats(): Promise<Stats> {
+  const res = await fetch(`${BASE_URL}/stats`);
+  if (!res.ok) throw new Error("Failed to fetch stats");
+  return res.json();
+}
+
 export async function fetchLogs(): Promise<LogEntry[]> {
   const res = await fetch(`${BASE_URL}/logs`);
   if (!res.ok) throw new Error("Failed to fetch logs");
+  return res.json();
+}
+
+export async function fetchRecentEmails(): Promise<LogEntry[]> {
+  const res = await fetch(`${BASE_URL}/recent-emails`);
+  if (!res.ok) throw new Error("Failed to fetch recent emails");
+  return res.json();
+}
+
+export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
+  const res = await fetch(`${BASE_URL}/calendar-events`);
+  if (!res.ok) throw new Error("Failed to fetch calendar events");
   return res.json();
 }
 

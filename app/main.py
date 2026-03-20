@@ -18,7 +18,12 @@ from app.db.repository import (
     count_processed_today,
     get_availabilities_for_participants,
     get_last_email_subject,
+    get_last_processing_logs,
     get_participant_emails,
+    get_recent_emails,
+    get_stats,
+    is_message_processed,
+    record_processed_email,
     upsert_participant_and_store_availability,
 )
 from app.email.gmail_client import GmailClient
@@ -67,6 +72,8 @@ class ProcessEmailsResponse(BaseModel):
     calendar_event_link: Optional[str] = None
     replied_to: list[str]
 
+from app.services.email_processor import process_single_email
+
 # Polling state exposed by /status
 polling_state = {
     "is_polling": False,
@@ -77,174 +84,11 @@ polling_state_lock = threading.Lock()
 polling_thread: Optional[threading.Thread] = None
 polling_stop_event = threading.Event()
 
-# Keyword heuristics (MVP) - expanded for better matching
-SCHEDULING_KEYWORDS = [
-    "available",
-    "free", 
-    "schedule",
-    "meet",
-    "meeting",
-    "availability",
-    "time slot",
-    "tomorrow",
-    "today",
-    "time",
-    "when",
-    "can we",
-    "let's",
-    "lets",
-    "appointment",
-    "call",
-    "discussion",
-]
-UPDATE_KEYWORDS = [
-    "update",
-    "status",
-    "any news",
-    "what happened",
-]
-
-
 def _now_ist_iso() -> str:
     return datetime.now(IST_TZ).isoformat()
 
 
-def detect_update_request(text: str) -> bool:
-    t = (text or "").lower()
-    return any(k in t for k in UPDATE_KEYWORDS)
-
-
-def detect_scheduling_request(text: str) -> bool:
-    t = (text or "").lower()
-    return any(k in t for k in SCHEDULING_KEYWORDS)
-
-
-def summarize_latest_thread_messages(messages: list) -> str:
-    """
-    MVP extractive summarizer:
-    - takes the last 3 message bodies
-    - trims each to a short snippet
-    """
-    bodies: list[str] = []
-    for m in messages[-3:]:
-        body = (getattr(m, "body_text", None) or "").strip()
-        if body:
-            bodies.append(body)
-    if not bodies:
-        return "No recent message content found in this thread."
-
-    parts: list[str] = []
-    for idx, body in enumerate(bodies, start=1):
-        one_line = " ".join(body.split())
-        trimmed = one_line[:250] + ("..." if len(one_line) > 250 else "")
-        parts.append(f"{idx}. {trimmed}")
-    return "Recent context:\n" + "\n".join(parts)
-
-
-def get_last_processing_logs(db_path, limit=20):
-    """Get last processing logs from database."""
-    import sqlite3
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT message_id, subject, processed_at, action_taken, status 
-            FROM processed_emails 
-            ORDER BY processed_at DESC 
-            LIMIT ?
-        """, (limit,))
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            {
-                "message_id": r[0],
-                "subject": r[1],
-                "processed_at": r[2],
-                "action_taken": r[3],
-                "status": r[4]
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        return []
-
-
-def record_processed_email(db_path, message_id, subject, action_taken, status, details=""):
-    """Record a processed email in the database."""
-    import sqlite3
-    from datetime import datetime
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR IGNORE INTO processed_emails 
-            (message_id, subject, processed_at, action_taken, status, details)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (message_id, subject, datetime.now().isoformat(), action_taken, status, details))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Error recording email: {e}")
-
-
-def init_database(db_path):
-    """Initialize database tables once at startup."""
-    import sqlite3
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Create processed_emails table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT UNIQUE,
-                subject TEXT,
-                processed_at TEXT,
-                action_taken TEXT,
-                status TEXT,
-                details TEXT
-            )
-        """)
-        
-        # Create processing_logs table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processing_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                logged_at TEXT,
-                message_id TEXT,
-                subject TEXT,
-                action_taken TEXT,
-                status TEXT,
-                details TEXT
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
-        print(f"Database initialized at: {db_path}")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
-
-
-def is_message_processed(db_path, message_id):
-    """Check if a message has already been processed."""
-    import sqlite3
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id FROM processed_emails WHERE message_id = ?", 
-            (message_id,)
-        )
-        result = cursor.fetchone()
-        conn.close()
-        if result is not None:
-            print(f"Skipping already processed: {message_id}")
-        return result is not None
-    except Exception as e:
-        print(f"Error checking if message processed: {e}")
-        return False
+# (redundant local definitions removed)
 
 
 def _poll_loop() -> None:
@@ -321,204 +165,28 @@ def _poll_loop() -> None:
                     continue
 
                 processed_count += 1
+                
+                # Fetch message to get subject for logging
                 original = gmail.get_message_full(message_id)
                 subject = original.subject
-                full_text = f"{original.subject}\n{original.from_email}\n{original.body_text}"
                 
-                print(f"Found email: {subject} - checking keywords")
+                # Use the service to process the email
+                action_taken, status, details = process_single_email(
+                    db_path=db_path,
+                    gmail=gmail,
+                    message_id=message_id,
+                    assistant_email=assistant_email
+                )
+
+                # Final logging and recording for this message
+                _log(
+                    message_id=message_id,
+                    subject=subject,
+                    action_taken=action_taken,
+                    status=status,
+                    details=details,
+                )
                 
-                # Scheduling request
-                scheduling_match = detect_scheduling_request(full_text)
-                update_match = detect_update_request(full_text)
-                
-                print(f"Keywords - Scheduling: {scheduling_match}, Update: {update_match}")
-                
-                if scheduling_match:
-                    action_taken = "scheduling"
-                    status = "success"
-
-                    reference_ist = datetime.now(IST_TZ)
-                    intervals = parse_availability(original.body_text, reference_ist=reference_ist)
-                    if not intervals:
-                        status = "no_availability"
-                        _log(
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            details="No availability intervals found in email body.",
-                        )
-                        continue
-
-                    upsert_participant_and_store_availability(
-                        db_path,
-                        participant_email=original.from_email,
-                        intervals=[(i.start, i.end) for i in intervals],
-                        source_message_id=message_id,
-                    )
-
-                    participant_emails = get_participant_emails(db_path)
-                    raw_windows = get_availabilities_for_participants(db_path, participant_emails)
-
-                    # Filter out participants with no availability stored yet.
-                    participant_emails_filtered: list[str] = []
-                    participant_intervals: list[list[AvailabilityInterval]] = []
-                    for email, windows in zip(participant_emails, raw_windows):
-                        if windows:
-                            participant_emails_filtered.append(email)
-                            participant_intervals.append([AvailabilityInterval(start=s, end=e) for (s, e) in windows])
-
-                    if len(participant_intervals) < 2:
-                        status = "not_enough_participants"
-                        _log(
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            details="Need at least 2 participants with stored availability before scheduling.",
-                        )
-                        record_processed_email(
-                            db_path,
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            processed_at=datetime.now(IST_TZ),
-                        )
-                        continue
-
-                    overlap_segments = find_overlapping_slots(participant_intervals)
-                    if not overlap_segments:
-                        status = "no_overlap"
-                        _log(
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            details="No overlapping slot found across stored availabilities.",
-                        )
-                        record_processed_email(
-                            db_path,
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status=status,
-                            processed_at=datetime.now(IST_TZ),
-                        )
-                        continue
-
-                    overlap = sorted(overlap_segments, key=lambda x: x.start)[0]
-                    organizer_email = assistant_email or original.from_email
-
-                    calendar_event_id = "demo-event-123"
-                    calendar_event_link = "https://calendar.google.com/event?demo"
-                    try:
-                        calendar_client = GoogleCalendarClient()
-                        created_event_id, created_event_link = calendar_client.create_event(
-                            summary="Scheduling Confirmation (AI)",
-                            start_dt=overlap.start,
-                            end_dt=overlap.end,
-                            description=(
-                                "This calendar event was generated by an experimental AI assistant.\n"
-                                "It was created automatically based on overlapping availability extracted from emails."
-                            ),
-                            attendees_emails=participant_emails_filtered,
-                        )
-                        if created_event_id:
-                            calendar_event_id = created_event_id
-                        if created_event_link:
-                            calendar_event_link = created_event_link
-                    except Exception as e:
-                        _log(
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status="calendar_fallback",
-                            details=str(e),
-                        )
-
-                    gmail.send_confirmation_reply(
-                        to_email=original.from_email,
-                        organizer_email=organizer_email,
-                        original=original,
-                        meeting_start_iso=overlap.start.isoformat(),
-                        meeting_end_iso=overlap.end.isoformat(),
-                        calendar_link=calendar_event_link,
-                        participant_emails=participant_emails_filtered,
-                    )
-
-                    _log(
-                        message_id=message_id,
-                        subject=subject,
-                        action_taken=action_taken,
-                        status=status,
-                        details=f"calendar_event_id={calendar_event_id}",
-                    )
-                    
-                    # Record successful scheduling
-                    record_processed_email(
-                        db_path,
-                        message_id=message_id,
-                        subject=subject,
-                        action_taken=action_taken,
-                        status=status,
-                        processed_at=datetime.now(IST_TZ),
-                    )
-
-                # Update request
-                elif update_match:
-                    action_taken = "update"
-                    status = "success"
-
-                    thread_messages = []
-                    if original.thread_id:
-                        thread_messages = gmail.get_thread_messages(original.thread_id)
-
-                    # Summarize last 3 messages of the thread.
-                    summary = summarize_latest_thread_messages(thread_messages[-3:])
-                    disclaimer = "This email was generated by an experimental AI assistant."
-                    reply_body = f"{summary}\n\n{disclaimer}"
-
-                    organizer_email = assistant_email or original.from_email
-                    gmail.send_text_reply(
-                        to_email=original.from_email,
-                        organizer_email=organizer_email,
-                        original=original,
-                        subject=original.subject or "Update",
-                        body_text=reply_body,
-                    )
-
-                    _log(
-                        message_id=message_id,
-                        subject=subject,
-                        action_taken=action_taken,
-                        status=status,
-                        details=None,
-                    )
-                    
-                    # Record successful update
-                    record_processed_email(
-                        db_path,
-                        message_id=message_id,
-                        subject=subject,
-                        action_taken=action_taken,
-                        status=status,
-                        processed_at=datetime.now(IST_TZ),
-                    )
-
-                # Unknown/irrelevant email
-                else:
-                    action_taken = "ignored"
-                    status = "skipped"
-                    print(f"Ignoring email: {subject} - no keywords matched")
-                    _log(
-                        message_id=message_id,
-                        subject=subject,
-                        action_taken=action_taken,
-                        status=status,
-                        details="Email did not match scheduling or update keywords.",
-                    )
-
                 record_processed_email(
                     db_path,
                     message_id=message_id,
@@ -529,18 +197,11 @@ def _poll_loop() -> None:
                 )
 
                 # Mark as read only after we've successfully handled it.
-                # Leave "ignored/skipped" messages unread so you can refine keywords later.
-                if gmail is not None and status != "skipped":
+                if gmail is not None and status == "success":
                     try:
                         gmail.mark_as_read(message_id)
                     except Exception as e:
-                        _log(
-                            message_id=message_id,
-                            subject=subject,
-                            action_taken=action_taken,
-                            status="mark_as_read_failed",
-                            details=str(e),
-                        )
+                        print(f"Mark as read failed: {e}")
 
                 with polling_state_lock:
                     polling_state["last_email_subject"] = subject
@@ -558,18 +219,82 @@ def _poll_loop() -> None:
                     record_processed_email(
                         db_path,
                         message_id=message_id,
-                        subject=None,
+                        subject="Error",
                         action_taken="error",
                         status="error",
                         processed_at=datetime.now(IST_TZ),
                     )
-                except Exception:
-                    pass
+                except Exception as e2:
+                    print(f"Critical error recording failure: {e2}")
 
         # Print summary of this polling tick
         print(f"Polling tick complete - processed: {processed_count}, skipped: {skipped_count}")
 
         time.sleep(60)
+
+@app.get("/status")
+def get_status():
+    """Get polling status."""
+    db_path = os.environ.get("DATABASE_PATH", "data/availability.db")
+    with polling_state_lock:
+        state = polling_state.copy()
+    
+    state["emails_processed_today"] = count_processed_today(db_path)
+    state["last_email_subject"] = get_last_email_subject(db_path)
+    state["is_polling"] = polling_active
+    return state
+
+@app.get("/stats")
+def stats():
+    """Get email processing stats."""
+    db_path = os.environ.get("DATABASE_PATH", "data/availability.db")
+    stats_data = get_stats(db_path)
+    
+    # Optional: Get unread count from Gmail if possible
+    unread_count = 0
+    try:
+        gmail = GmailClient()
+        # Gmail list message with q='is:unread'
+        svc = gmail._service()
+        res = svc.users().messages().list(userId=gmail.user_id, q="is:unread", maxResults=1).execute()
+        unread_count = res.get("resultSizeEstimate", 0)
+    except Exception:
+        pass
+        
+    stats_data["unread_count"] = unread_count
+    return stats_data
+
+@app.get("/recent-emails")
+def recent_emails():
+    """Get recent processed emails."""
+    db_path = os.environ.get("DATABASE_PATH", "data/availability.db")
+    return get_recent_emails(db_path, limit=10)
+
+@app.get("/calendar-events")
+def calendar_events():
+    """Get upcoming calendar events."""
+    try:
+        calendar_client = GoogleCalendarClient()
+        svc = calendar_client._service()
+        now = datetime.utcnow().isoformat() + "Z"
+        events_result = svc.events().list(
+            calendarId=calendar_client.calendar_id,
+            timeMin=now,
+            maxResults=10,
+            singleEvents=True,
+            orderBy="startTime"
+        ).execute()
+        events = events_result.get("items", [])
+        return events
+    except Exception as e:
+        print(f"Error fetching calendar events: {e}")
+        return []
+
+@app.get("/logs")
+def get_logs():
+    """Get latest processing logs."""
+    db_path = os.environ.get("DATABASE_PATH", "data/availability.db")
+    return get_last_processing_logs(db_path, limit=20)
 
 @app.get("/health")
 def health():

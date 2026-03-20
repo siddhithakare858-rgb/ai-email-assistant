@@ -29,10 +29,10 @@ def record_processed_email(
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO processed_emails(message_id, subject, processed_at, action_taken, status)
+            INSERT OR REPLACE INTO processed_emails(message_id, subject, processed_at, action_taken, status)
             VALUES(?, ?, ?, ?, ?)
             """,
-            (message_id, subject, processed_at.isoformat(), action_taken, status),
+            (message_id, subject or "", processed_at.isoformat(), action_taken, status),
         )
 
 
@@ -91,6 +91,42 @@ def count_processed_today(db_path: str, *, tz=IST_TZ) -> int:
         )
         row = cur.fetchone()
         return int(row["cnt"]) if row else 0
+
+
+def get_stats(db_path: str) -> dict:
+    with connect(db_path) as conn:
+        # Total received
+        cur = conn.execute("SELECT COUNT(1) FROM processed_emails")
+        total_received = cur.fetchone()[0]
+
+        # Total sent (actions that resulted in an email being sent)
+        cur = conn.execute(
+            """
+            SELECT COUNT(1) 
+            FROM processed_emails 
+            WHERE action_taken IN ('scheduling', 'update') AND status = 'success'
+            """
+        )
+        total_sent = cur.fetchone()[0]
+
+        return {
+            "total_received": total_received,
+            "total_sent": total_sent,
+        }
+
+
+def get_recent_emails(db_path: str, limit: int = 5) -> list[dict]:
+    with connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT message_id, subject, processed_at, action_taken, status
+            FROM processed_emails
+            ORDER BY processed_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]
 
 
 def get_last_email_subject(db_path: str) -> Optional[str]:
