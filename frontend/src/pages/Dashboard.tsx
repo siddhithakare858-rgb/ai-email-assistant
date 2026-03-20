@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchStatus, fetchLogs, processEmails, type LogEntry } from "@/lib/api";
+import { fetchStatus, fetchLogs, processEmails, fetchHealth, type LogEntry } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LightningLogo } from "@/components/LightningLogo";
 import { Mail, FileText, Clock, Zap, Send, RefreshCw, LogOut, ChevronRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 
@@ -42,12 +43,53 @@ export default function Dashboard() {
   const [processResult, setProcessResult] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [processing, setProcessing] = useState(false);
 
+  const { toast } = useToast();
+
   useEffect(() => {
     if (!connectedEmail) navigate("/");
   }, [connectedEmail, navigate]);
 
-  const { data: status } = useQuery({ queryKey: ["status"], queryFn: fetchStatus, refetchInterval: 30000, retry: 1 });
-  const { data: logs } = useQuery({ queryKey: ["logs"], queryFn: fetchLogs, refetchInterval: 15000, retry: 1 });
+  const { data: status, isError: isStatusError, isFetching: isStatusFetching } = useQuery({
+    queryKey: ["status"],
+    queryFn: fetchStatus,
+    refetchInterval: 30000,
+    retry: 1,
+    onError: (err: any) => {
+      toast({
+        title: "Unable to fetch status",
+        description: err?.message || "Please check your network",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: logs } = useQuery({
+    queryKey: ["logs"],
+    queryFn: fetchLogs,
+    refetchInterval: 15000,
+    retry: 1,
+    onError: (err: any) => {
+      toast({
+        title: "Unable to fetch activity log",
+        description: err?.message || "Please check your network",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: health, isError: isHealthError } = useQuery({
+    queryKey: ["health"],
+    queryFn: fetchHealth,
+    refetchInterval: 15000,
+    retry: 1,
+    onError: (err: any) => {
+      toast({
+        title: "Health check failed",
+        description: err?.message || "Could not reach API",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleProcess = useCallback(async () => {
     if (!messageId.trim()) return;
@@ -55,16 +97,27 @@ export default function Dashboard() {
     setProcessResult(null);
     try {
       const res = await processEmails({ message_ids: [messageId.trim()], organizer_email: connectedEmail });
-      setProcessResult({ type: "success", msg: JSON.stringify(res, null, 2) });
+      const msg = JSON.stringify(res, null, 2);
+      setProcessResult({ type: "success", msg });
+      toast({
+        title: "Email processed",
+        description: "The message has been sent for processing.",
+      });
       setMessageId("");
       queryClient.invalidateQueries({ queryKey: ["logs"] });
       queryClient.invalidateQueries({ queryKey: ["status"] });
     } catch (err: any) {
-      setProcessResult({ type: "error", msg: err.message || "Something went wrong" });
+      const message = err?.message || "Something went wrong";
+      setProcessResult({ type: "error", msg: message });
+      toast({
+        title: "Process failed",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setProcessing(false);
     }
-  }, [messageId, connectedEmail, queryClient]);
+  }, [messageId, connectedEmail, queryClient, toast]);
 
   const handleSwitch = () => {
     localStorage.removeItem("mailmind_email");
@@ -76,6 +129,18 @@ export default function Dashboard() {
     { icon: FileText, label: "Last Email Subject", value: status?.last_email_subject || "No emails yet" },
     { icon: Clock, label: "Agent Uptime", value: uptime },
   ];
+
+  const isAgentActive = Boolean(health?.status === "ok" && health?.gmail_connected && health?.polling_active);
+  const healthStatusText = isAgentActive ? "Agent Active" : "Agent Offline";
+
+  const timeSince = (ts?: string) => {
+    if (!ts) return "—";
+    try {
+      return new Date(ts).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+    } catch {
+      return ts;
+    }
+  };
 
   const steps = [
     { num: 1, title: "Email Received", desc: "Someone emails asking to meet" },
@@ -94,10 +159,13 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2 glass-card px-3 py-1.5 rounded-full text-xs">
-              <span className="w-2 h-2 rounded-full bg-accent pulse-dot" />
-              Agent Active
+              <span className={`w-2 h-2 rounded-full pulse-dot ${isAgentActive ? "bg-accent" : "bg-destructive"}`} />
+              {healthStatusText}
             </div>
-            <span className="hidden md:block text-xs text-muted-foreground truncate max-w-[180px]">{connectedEmail}</span>
+            <div className="hidden sm:flex flex-col text-right text-xs text-muted-foreground">
+              <span className="truncate max-w-[220px]">{connectedEmail || "No account"}</span>
+              <span>Last checked: {status?.last_checked ? formatTime(status.last_checked) : "…"}</span>
+            </div>
             <button onClick={handleSwitch} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               <LogOut size={12} /> Switch
             </button>
@@ -118,6 +186,19 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Health & Sync */}
+        <section className="animate-fade-up" style={{ animationDelay: "245ms" }}>
+          <div className="glass-card rounded-xl p-4 border border-white/10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <p className="text-xs text-muted-foreground">API health: <span className={isAgentActive ? "text-accent" : "text-destructive"}>{healthStatusText}</span></p>
+              <p className="text-xs text-muted-foreground">Last API sync: <span className="text-foreground">{timeSince(health?.timestamp)}</span></p>
+            </div>
+            {!isAgentActive && (
+              <p className="mt-2 text-xs text-destructive/80">Your agent is currently offline. The assistant will resume as soon as connection is restored.</p>
+            )}
+          </div>
+        </section>
 
         {/* How It Works */}
         <section className="animate-fade-up" style={{ animationDelay: "250ms" }}>
@@ -150,6 +231,12 @@ export default function Dashboard() {
             </button>
           </div>
           <div className="glass-card rounded-xl divide-y divide-border overflow-hidden">
+            {!isAgentActive && (
+              <div className="p-4 text-center bg-[#221f2f] border-b border-border">
+                <p className="text-xs text-destructive">Agent is offline, attempting reconnect... (Waiting for /health success)</p>
+              </div>
+            )}
+
             {!logs || logs.length === 0 ? (
               <div className="p-8 text-center">
                 <div className="w-3 h-3 rounded-full bg-primary/40 mx-auto mb-3 pulse-dot" />
