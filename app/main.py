@@ -2,9 +2,11 @@ import threading
 import time
 from datetime import datetime
 from typing import Optional
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from app.tz import IST_TZ
@@ -415,7 +417,42 @@ def _poll_loop() -> None:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Health check endpoint with system status."""
+    cfg = load_config()
+    token_path = cfg["GOOGLE_OAUTH_TOKEN_PATH"]
+    
+    return {
+        "status": "ok",
+        "gmail_connected": os.path.exists(token_path),
+        "polling_active": False,  # Could be updated if we implement polling
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.get("/setup-instructions", response_class=PlainTextResponse)
+def setup_instructions():
+    """Return setup instructions for Gmail OAuth."""
+    return """
+Gmail OAuth Setup Instructions
+===========================
+
+To use Gmail integration with this application:
+
+1. Run the OAuth setup script locally:
+   python scripts/auth_google.py
+
+2. This will create a 'data/token.json' file with your OAuth credentials.
+
+3. For deployment (like Render), upload the token.json content as an environment variable:
+   - Variable name: TOKEN_JSON
+   - Variable value: (paste the entire contents of token.json)
+
+4. The application will automatically detect and use the TOKEN_JSON environment variable
+   if it exists, creating the token.json file from it.
+
+5. Restart your application after setting up the environment variable.
+
+Note: Keep your TOKEN_JSON secure and never commit it to version control.
+"""
 
 @app.get("/messages")
 def get_messages():
