@@ -178,6 +178,51 @@ def get_last_processing_logs(db_path, limit=20):
         return []
 
 
+def is_message_processed(db_path, message_id):
+    """Check if a message has already been processed."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS processed_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT UNIQUE,
+                subject TEXT,
+                processed_at TEXT,
+                action_taken TEXT,
+                status TEXT
+            )
+        """)
+        conn.commit()
+        cursor.execute(
+            "SELECT id FROM processed_emails WHERE message_id = ?", 
+            (message_id,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+        return result is not None
+    except Exception as e:
+        return False
+
+def mark_message_processed(db_path, message_id, subject, action_taken, status):
+    """Mark a message as processed in the database."""
+    import sqlite3
+    from datetime import datetime
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR IGNORE INTO processed_emails 
+            (message_id, subject, processed_at, action_taken, status)
+            VALUES (?, ?, ?, ?, ?)
+        """, (message_id, subject, datetime.now().isoformat(), action_taken, status))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error marking message processed: {e}")
+
+
 def _poll_loop() -> None:
     db_path = cfg["DATABASE_PATH"]
     gmail: Optional[GmailClient] = None
