@@ -15,19 +15,7 @@
     "noFallthroughCasesInSwitch": false,
     "noImplicitAny": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    },
-    "skipLibCheck": true,
-    "strict": false,
-    "target": "ES2020",
-    "types": [
-      "vitest/globals"
-    ],
-    "useDefineForClassFields": true
+    "noUnusedParameters": false
   },
   "include": [
     "src"
