@@ -1,0 +1,170 @@
+from datetime import datetime
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from app.tz import IST_TZ
+from app.config import load_config
+from app.db.database import init_db
+from app.db.repository import upsert_participant_and_store_availability
+from app.email.gmail_client import GmailClient
+from app.calendar.google_calendar_client import GoogleCalendarClient
+from app.parsing.availability_parser import AvailabilityInterval, parse_availability
+from app.scheduling.overlap_finder import find_overlapping_slots
+
+cfg = load_config()
+
+app = FastAPI(title="AI Email Scheduling Assistant (MVP)")
+
+# Allow the React dev server to call the FastAPI API during development.
+# (If you deploy, replace "*" with your real frontend origin(s).)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class ProcessEmailsRequest(BaseModel):
+    message_ids: list[str]
+    organizer_email: str
+    calendar_summary: Optional[str] = "Scheduling Confirmation (AI)"
+
+class ProcessEmailsResponse(BaseModel):
+    overlap_start_ist: str
+    overlap_end_ist: str
+    calendar_event_id: str
+    calendar_event_link: Optional[str] = None
+    replied_to: list[str]
+
+@app.on_event("startup")
+def _startup():
+    init_db(cfg["DATABASE_PATH"])
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/messages")
+def get_messages():
+    """Get latest message IDs from Gmail inbox."""
+    gmail = GmailClient()
+    return gmail.list_messages()
+
+# Dummy email used in the MVP (avoids Gmail integration)
+class DummyEmail:
+    def __init__(self, email: str, body: str):
+        self.from_email = email
+        self.body_text = body
+        self.subject = ""
+
+@app.post("/process-emails", response_model=ProcessEmailsResponse)
+def process_emails(req: ProcessEmailsRequest) -> ProcessEmailsResponse:
+    if not (2 <= len(req.message_ids) <= 3):
+        raise HTTPException(status_code=400, detail="MVP expects 2-3 message_ids.")
+
+    participant_intervals: list[list[AvailabilityInterval]] = []
+    participant_emails: list[str] = []
+
+    reference_ist = datetime.now(IST_TZ)
+
+    gmail = None
+    gmail_fallback_logged = False
+    try:
+        gmail = GmailClient()
+    except Exception as e:
+        # Token missing / invalid credentials: fall back to dummy parsing.
+        # (Still keeps MVP usable without Google setup.)
+        print(f"[process-emails] Gmail client init failed; using dummy fallback. Error: {e}")
+
+    # Try real Gmail first; fall back to dummy mode if any Gmail step fails.
+    for message_id in req.message_ids:
+        if gmail is not None:
+            try:
+                original = gmail.get_message(message_id)
+            except Exception as e:
+                if not gmail_fallback_logged:
+                    print(
+                        f"[process-emails] Gmail API failed; using dummy fallback. "
+                        f"Error: {e}"
+                    )
+                    gmail_fallback_logged = True
+                original = None
+        else:
+            original = None
+
+        if original is None:
+            # Dummy email used only for fallback/demo parsing.
+            if message_id == "msg1":
+                original = {"from_email": "a@test.com", "subject": "Availability", "body_text": "I am free tomorrow 10-12"}
+            else:
+                original = {"from_email": "b@test.com", "subject": "Availability", "body_text": "Available 11-1"}
+
+        intervals = parse_availability(original["body_text"], reference_ist=reference_ist)
+        if not intervals:
+            continue
+
+        upsert_participant_and_store_availability(
+            cfg["DATABASE_PATH"],
+            participant_email=original["from_email"],
+            intervals=[(i.start, i.end) for i in intervals],
+            source_message_id=message_id,
+        )
+
+        participant_intervals.append(intervals)
+        participant_emails.append(original["from_email"])
+
+    if not (2 <= len(participant_intervals) <= 3):
+        raise HTTPException(status_code=400, detail="Could not parse availability.")
+
+    overlap_segments = find_overlapping_slots(participant_intervals)
+    if not overlap_segments:
+        raise HTTPException(status_code=404, detail="No overlapping slot found.")
+
+    overlap = sorted(overlap_segments, key=lambda x: x.start)[0]
+    meeting_start_iso = overlap.start.isoformat()
+    meeting_end_iso = overlap.end.isoformat()
+
+    # Create Calendar event (or fall back to demo values if OAuth/token isn't ready).
+    calendar_event_id = "demo-event-123"
+    calendar_event_link = "https://calendar.google.com/event?demo"
+    calendar_summary = req.calendar_summary or "Scheduling Confirmation (AI)"
+    calendar_description = (
+        "This calendar event was generated by an experimental AI assistant.\n"
+        "It was created automatically based on the overlapping availability extracted from emails."
+    )
+
+    try:
+        calendar_client = GoogleCalendarClient()
+        created_event_id, created_event_link = calendar_client.create_event(
+            summary=calendar_summary,
+            start_dt=overlap.start,
+            end_dt=overlap.end,
+            description=calendar_description,
+            attendees_emails=participant_emails,
+        )
+        if not created_event_id:
+            raise RuntimeError("Calendar API returned empty event id.")
+
+        calendar_event_id, calendar_event_link = created_event_id, created_event_link
+    except Exception as e:
+        print(f"[process-emails] Calendar API failed; using demo calendar values. Error: {e}")
+
+    # Email reply (still dummy in MVP; you can later hook to GmailClient.send_confirmation_reply).
+    replied_to = participant_emails
+
+    return ProcessEmailsResponse(
+        overlap_start_ist=meeting_start_iso,
+        overlap_end_ist=meeting_end_iso,
+        calendar_event_id=calendar_event_id,
+        calendar_event_link=calendar_event_link,
+        replied_to=replied_to,
+    )
+
+@app.get("/messages")
+def get_messages():
+    gmail = GmailClient()
+    return gmail.list_messages()
