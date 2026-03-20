@@ -382,3 +382,11 @@ html, body, #root {
   position: relative !important;
   cursor: pointer !important;
 }
+input[type="email"], input[type="text"] {
+  color: #000000 !important;
+  background: #ffffff !important;
+}
+
+input::placeholder {
+  color: #666666 !important;
+}
