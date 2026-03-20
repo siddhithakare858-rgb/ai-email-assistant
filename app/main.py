@@ -141,28 +141,41 @@ def summarize_latest_thread_messages(messages: list) -> str:
 
 
 def get_last_processing_logs(db_path, limit=20):
-    """Get the last processing logs from the database."""
+    """Get last processing logs from database."""
     import sqlite3
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT message_id, subject, processed_at, action_taken, status 
-        FROM processed_emails 
-        ORDER BY processed_at DESC 
-        LIMIT ?
-    """, (limit,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [
-        {
-            "message_id": r[0],
-            "subject": r[1],
-            "processed_at": r[2],
-            "action_taken": r[3],
-            "status": r[4]
-        }
-        for r in rows
-    ]
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS processed_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT,
+                subject TEXT,
+                processed_at TEXT,
+                action_taken TEXT,
+                status TEXT
+            )
+        """)
+        cursor.execute("""
+            SELECT message_id, subject, processed_at, action_taken, status 
+            FROM processed_emails 
+            ORDER BY processed_at DESC 
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "message_id": r[0],
+                "subject": r[1],
+                "processed_at": r[2],
+                "action_taken": r[3],
+                "status": r[4]
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        return []
 
 
 def _poll_loop() -> None:

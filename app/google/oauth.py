@@ -22,13 +22,17 @@ def get_google_credentials(scopes: Sequence[str]) -> Credentials:
     credentials_path = cfg["GOOGLE_CLIENT_SECRETS_PATH"]
 
     # Check for TOKEN_JSON environment variable first (for deployments)
-    token_json_env = os.getenv("TOKEN_JSON")
-    if token_json_env:
-        # Create token.json from environment variable
-        os.makedirs(os.path.dirname(token_path), exist_ok=True)
-        with open(token_path, "w", encoding="utf-8") as f:
-            f.write(token_json_env)
-        print(f"[OAuth] Created token.json from TOKEN_JSON environment variable")
+    token_json = os.environ.get("TOKEN_JSON", "").strip()
+    if token_json:
+        try:
+            json.loads(token_json)  # validate it first
+            os.makedirs(os.path.dirname(token_path), exist_ok=True)
+            with open(token_path, "w", encoding="utf-8") as f:
+                f.write(token_json)
+            print(f"[OAuth] Created token.json from TOKEN_JSON environment variable")
+        except json.JSONDecodeError as e:
+            print(f"[OAuth] TOKEN_JSON is invalid JSON: {e}")
+            # Continue to try file-based token as fallback
 
     creds = None
     if os.path.exists(token_path):
