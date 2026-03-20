@@ -1,12 +1,110 @@
 import sqlite3
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.db.database import connect
+from app.tz import IST_TZ
 
 
 def _utc_now_iso() -> str:
     # SQLite stores timestamps as ISO strings in this MVP.
     return datetime.now(timezone.utc).isoformat()
+
+
+def is_message_processed(db_path: str, message_id: str) -> bool:
+    with connect(db_path) as conn:
+        cur = conn.execute("SELECT 1 FROM processed_emails WHERE message_id = ? LIMIT 1", (message_id,))
+        return cur.fetchone() is not None
+
+
+def record_processed_email(
+    db_path: str,
+    *,
+    message_id: str,
+    subject: str,
+    action_taken: str,
+    status: str,
+    processed_at: datetime,
+) -> None:
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO processed_emails(message_id, subject, processed_at, action_taken, status)
+            VALUES(?, ?, ?, ?, ?)
+            """,
+            (message_id, subject, processed_at.isoformat(), action_taken, status),
+        )
+
+
+def add_processing_log(
+    db_path: str,
+    *,
+    logged_at: datetime,
+    message_id: Optional[str],
+    subject: Optional[str],
+    action_taken: Optional[str],
+    status: Optional[str],
+    details: Optional[str],
+) -> None:
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO processing_logs(logged_at, message_id, subject, action_taken, status, details)
+            VALUES(?, ?, ?, ?, ?, ?)
+            """,
+            (
+                logged_at.isoformat(),
+                message_id,
+                subject,
+                action_taken,
+                status,
+                details,
+            ),
+        )
+
+
+def get_last_processing_logs(db_path: str, limit: int = 20) -> list[dict]:
+    with connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT logged_at, message_id, subject, action_taken, status, details
+            FROM processing_logs
+            ORDER BY logged_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def count_processed_today(db_path: str, *, tz=IST_TZ) -> int:
+    today_str = datetime.now(tz).date().isoformat()
+    # processed_at is stored in local tz isoformat, so the date prefix matches "local date".
+    with connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT COUNT(1) as cnt
+            FROM processed_emails
+            WHERE substr(processed_at, 1, 10) = ?
+            """,
+            (today_str,),
+        )
+        row = cur.fetchone()
+        return int(row["cnt"]) if row else 0
+
+
+def get_last_email_subject(db_path: str) -> Optional[str]:
+    with connect(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT subject
+            FROM processed_emails
+            ORDER BY processed_at DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+        return row["subject"] if row and row["subject"] else None
 
 
 def upsert_participant_and_store_availability(

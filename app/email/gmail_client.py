@@ -212,3 +212,132 @@ class GmailClient:
         ).execute()
         return sent.get("id", "")
 
+    def get_profile_email(self) -> str:
+        """
+        Returns the authenticated Gmail account email address.
+        Used so we can set the correct `From` header in replies.
+        """
+        gmail = self._service()
+        profile = gmail.users().getProfile(userId=self.user_id).execute()
+        return profile.get("emailAddress", "")
+
+    def list_unread_message_ids(self, *, max_results: int = 10) -> list[str]:
+        """
+        List unread message IDs from the inbox.
+        """
+        gmail = self._service()
+        try:
+            response = gmail.users().messages().list(
+                userId=self.user_id,
+                q="in:inbox is:unread",
+                maxResults=max_results,
+            ).execute()
+            messages = response.get("messages", []) or []
+            return [m["id"] for m in messages if m.get("id")]
+        except HttpError as e:
+            raise RuntimeError(f"Gmail API error listing unread messages: {e}")
+
+    def mark_as_read(self, message_id: str) -> None:
+        """
+        Mark a Gmail message as read by removing the `UNREAD` label.
+        """
+        gmail = self._service()
+        try:
+            gmail.users().messages().modify(
+                userId=self.user_id,
+                id=message_id,
+                body={"removeLabelIds": ["UNREAD"]},
+            ).execute()
+        except HttpError as e:
+            raise RuntimeError(f"Gmail API error marking message as read {message_id}: {e}")
+
+    def _parse_gmail_message(self, msg: dict) -> GmailMessage:
+        headers = msg.get("payload", {}).get("headers", []) or []
+        header_map = {h.get("name", "").lower(): h.get("value", "") for h in headers}
+
+        subject = header_map.get("subject", "") or ""
+        from_email = header_map.get("from", "") or ""
+        message_rfc_id = header_map.get("message-id")
+        thread_id = msg.get("threadId", "") or ""
+        message_id = msg.get("id", "") or ""
+
+        # Extract just the email address if header includes a name.
+        m = re.search(r"<([^>]+)>", from_email)
+        from_email_clean = m.group(1) if m else from_email.strip()
+
+        body_text = _extract_body_from_payload(msg.get("payload", {}))
+
+        return GmailMessage(
+            message_id=message_id,
+            thread_id=thread_id,
+            subject=subject,
+            from_email=from_email_clean,
+            message_rfc_id=message_rfc_id,
+            body_text=body_text,
+        )
+
+    def get_thread_messages(self, thread_id: str) -> list[GmailMessage]:
+        """
+        Fetch a full email thread and return GmailMessage objects for each message.
+        """
+        gmail = self._service()
+        try:
+            thread = gmail.users().threads().get(
+                userId=self.user_id,
+                id=thread_id,
+                format="full",
+            ).execute()
+        except HttpError as e:
+            raise RuntimeError(f"Gmail API error fetching thread {thread_id}: {e}")
+
+        raw_messages = thread.get("messages", []) or []
+        parsed = [self._parse_gmail_message(m) for m in raw_messages]
+
+        # Sort by internal date if available (ms since epoch).
+        def _internal_key(m: GmailMessage, raw: dict) -> int:
+            try:
+                return int(raw.get("internalDate", 0))
+            except Exception:
+                return 0
+
+        # If internalDate missing, keep original order.
+        try:
+            raw_sorted = sorted(raw_messages, key=lambda m: int(m.get("internalDate", 0) or 0))
+            return [self._parse_gmail_message(m) for m in raw_sorted]
+        except Exception:
+            return parsed
+
+    def send_text_reply(
+        self,
+        *,
+        to_email: str,
+        organizer_email: str,
+        original: GmailMessage,
+        subject: str,
+        body_text: str,
+    ) -> str:
+        """
+        Send a plain-text reply email to `to_email`, referencing `original`.
+        """
+        gmail = self._service()
+
+        final_subject = subject or original.subject or "Update"
+        if final_subject and not final_subject.lower().startswith("re:"):
+            final_subject = f"Re: {final_subject}"
+
+        msg = EmailMessage()
+        msg["To"] = to_email
+        msg["From"] = organizer_email
+        msg["Subject"] = final_subject
+        if original.message_rfc_id:
+            msg["In-Reply-To"] = original.message_rfc_id
+            msg["References"] = original.message_rfc_id
+        msg.set_content(body_text)
+
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+        sent = gmail.users().messages().send(
+            userId=self.user_id,
+            body={"raw": raw},
+        ).execute()
+        return sent.get("id", "")
+

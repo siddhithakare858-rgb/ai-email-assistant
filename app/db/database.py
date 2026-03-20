@@ -32,6 +32,29 @@ def init_db(db_path: str) -> None:
             );
 
             CREATE INDEX IF NOT EXISTS idx_availabilities_participant_id ON availabilities(participant_id);
+
+            -- Background polling: track which emails have been processed.
+            CREATE TABLE IF NOT EXISTS processed_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT NOT NULL UNIQUE,
+                subject TEXT,
+                processed_at TEXT NOT NULL,
+                action_taken TEXT,
+                status TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_processed_emails_processed_at ON processed_emails(processed_at);
+
+            -- Processing logs for /logs endpoint.
+            CREATE TABLE IF NOT EXISTS processing_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logged_at TEXT NOT NULL,
+                message_id TEXT,
+                subject TEXT,
+                action_taken TEXT,
+                status TEXT,
+                details TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_processing_logs_logged_at ON processing_logs(logged_at);
             """
         )
         conn.commit()
