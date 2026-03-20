@@ -230,13 +230,15 @@ def is_message_processed(db_path, message_id):
         )
         result = cursor.fetchone()
         conn.close()
+        if result is not None:
+            print(f"Message {message_id} already processed - skipping")
         return result is not None
     except Exception as e:
         return False
 
 
 def _poll_loop() -> None:
-    db_path = cfg["DATABASE_PATH"]
+    db_path = os.environ.get("DATABASE_PATH", "/tmp/availability.db")
     gmail: Optional[GmailClient] = None
     assistant_email: Optional[str] = None
 
