@@ -157,19 +157,33 @@ export default function App() {
             },
           }}
         />
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+        
+        {/* Animated Particles Background */}
+        <div className="particles">
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+          <div className="particle"></div>
+        </div>
+
+        <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
           <div className="w-full max-w-md animate-fade-in">
-            {/* Lightning Bolt Icon */}
+            {/* Lightning Bolt Icon with Purple Gradient Background */}
             <div className="flex justify-center mb-8">
-              <div className="relative">
-                <div className="absolute inset-0 bg-purple-500 blur-3xl opacity-20 rounded-full"></div>
-                <Zap className="relative h-20 w-20 text-purple-400" />
+              <div className="gradient-icon-bg">
+                <Zap className="h-16 w-16 text-white" />
               </div>
             </div>
 
-            {/* Title and Subtitle */}
+            {/* Title and Subtitle with Gradient Text */}
             <div className="text-center mb-8">
-              <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">
+              <h1 className="text-5xl font-bold mb-3 tracking-tight gradient-text">
                 MailMind AI
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed">
@@ -177,8 +191,8 @@ export default function App() {
               </p>
             </div>
 
-            {/* Connection Card */}
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700 p-8 shadow-2xl">
+            {/* Connection Card with Glassmorphism */}
+            <div className="glassmorphism rounded-2xl p-8 shadow-2xl">
               <div className="space-y-6">
                 <div>
                   <label className="block text-base font-semibold text-gray-200 mb-3">
@@ -189,7 +203,7 @@ export default function App() {
                     type="email"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full px-5 py-4 text-lg bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-inner"
+                    className="w-full px-5 py-4 text-lg glassmorphism rounded-xl text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                     placeholder="you@gmail.com"
                     autoComplete="off"
                   />
@@ -199,7 +213,7 @@ export default function App() {
                   onClick={handleConnectGmail}
                   className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-4 px-6 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
                 >
-                  Connect My Gmail
+                  Activate My Assistant
                   <ArrowRight className="h-5 w-5" />
                 </button>
 
