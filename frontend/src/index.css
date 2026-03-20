@@ -187,12 +187,18 @@ html, body, #root {
 
 /* Dashboard card styles */
 .dashboard-card {
-  background: #12121a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-  padding: 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid rgba(108, 99, 255, 0.3);
+  border-radius: 12px;
+  padding: 24px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.dashboard-card:hover {
+  border-color: rgba(108, 99, 255, 0.5);
+  box-shadow: 0 4px 12px rgba(108, 99, 255, 0.1);
 }
 
 .dashboard-header {
@@ -202,7 +208,7 @@ html, body, #root {
 }
 
 .stats-number {
-  font-size: 3rem;
+  font-size: 40px;
   font-weight: 700;
   color: white;
   line-height: 1;
@@ -229,20 +235,32 @@ html, body, #root {
 }
 
 .step-card {
-  background: #12121a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a1a2e;
+  border: 1px solid rgba(108, 99, 255, 0.2);
   border-radius: 0.75rem;
   padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.step-card:hover {
+  border-color: rgba(108, 99, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(108, 99, 255, 0.1);
 }
 
 .activity-monitor {
-  background: #12121a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a1a2e;
+  border: 1px solid rgba(108, 99, 255, 0.2);
   border-radius: 1rem;
   padding: 2rem;
   text-align: center;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.activity-monitor:hover {
+  border-color: rgba(108, 99, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(108, 99, 255, 0.1);
 }
 
 .monitor-text {
@@ -270,6 +288,30 @@ html, body, #root {
   font-weight: 500;
   display: inline-flex;
   align-items: center;
+}
+
+/* Agent Offline warning */
+.status-warning {
+  background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
+  color: white;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Purple glow for logo */
+.logo-glow {
+  filter: drop-shadow(0 0 8px rgba(108, 99, 255, 0.4));
+  transition: filter 0.2s ease;
+}
+
+.logo-glow:hover {
+  filter: drop-shadow(0 0 12px rgba(108, 99, 255, 0.6));
 }
 
 @keyframes pulse {

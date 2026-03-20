@@ -255,7 +255,7 @@ export default function App() {
         <div className="dashboard-header">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="gradient-icon-bg">
+              <div className="gradient-icon-bg logo-glow">
                 <Zap className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -328,7 +328,7 @@ export default function App() {
                     <textarea
                       value={messageIdsInput}
                       onChange={(e) => setMessageIdsInput(e.target.value)}
-                      className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
+                      className="w-full rounded-xl manual-input resize-none"
                       placeholder="185c1b2f3a4b5c6d&#10;185c1b2f3a4b5c6e&#10;185c1b2f3a4b5c6f"
                       rows={4}
                       autoComplete="off"
@@ -343,7 +343,7 @@ export default function App() {
                     <input
                       value={userEmail}
                       readOnly
-                      className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 cursor-not-allowed"
+                      className="w-full rounded-xl manual-input cursor-not-allowed"
                       placeholder={userEmail}
                     />
                   </div>
@@ -356,7 +356,7 @@ export default function App() {
                       <input
                         value={meetingTitle}
                         onChange={(e) => setMeetingTitle(e.target.value)}
-                        className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                        className="w-full rounded-xl manual-input"
                         placeholder="Team Meeting"
                       />
                     </div>
@@ -368,7 +368,7 @@ export default function App() {
                       <input
                         value={meetingDescription}
                         onChange={(e) => setMeetingDescription(e.target.value)}
-                        className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                        className="w-full rounded-xl manual-input"
                         placeholder="Weekly sync to discuss project updates"
                       />
                     </div>
