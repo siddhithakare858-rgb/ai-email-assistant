@@ -129,6 +129,31 @@ def summarize_latest_thread_messages(messages: list) -> str:
     return "Recent context:\n" + "\n".join(parts)
 
 
+def get_last_processing_logs(db_path, limit=20):
+    """Get the last processing logs from the database."""
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT message_id, subject, processed_at, action_taken, status 
+        FROM processed_emails 
+        ORDER BY processed_at DESC 
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "message_id": r[0],
+            "subject": r[1],
+            "processed_at": r[2],
+            "action_taken": r[3],
+            "status": r[4]
+        }
+        for r in rows
+    ]
+
+
 def _poll_loop() -> None:
     db_path = cfg["DATABASE_PATH"]
     gmail: Optional[GmailClient] = None
