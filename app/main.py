@@ -454,6 +454,16 @@ def _poll_loop() -> None:
                         status=status,
                         details=f"calendar_event_id={calendar_event_id}",
                     )
+                    
+                    # Record successful scheduling
+                    record_processed_email(
+                        db_path,
+                        message_id=message_id,
+                        subject=subject,
+                        action_taken=action_taken,
+                        status=status,
+                        processed_at=datetime.now(IST_TZ),
+                    )
 
                 # Update request
                 elif update_match:
@@ -484,6 +494,16 @@ def _poll_loop() -> None:
                         action_taken=action_taken,
                         status=status,
                         details=None,
+                    )
+                    
+                    # Record successful update
+                    record_processed_email(
+                        db_path,
+                        message_id=message_id,
+                        subject=subject,
+                        action_taken=action_taken,
+                        status=status,
+                        processed_at=datetime.now(IST_TZ),
                     )
 
                 # Unknown/irrelevant email
@@ -725,7 +745,7 @@ def process_emails(req: ProcessEmailsRequest) -> ProcessEmailsResponse:
 
 @app.get("/status")
 def status():
-    db_path = cfg["DATABASE_PATH"]
+    db_path = os.environ.get("DATABASE_PATH", "/tmp/availability.db")
     emails_processed_today = count_processed_today(db_path)
     with polling_state_lock:
         last_subject = polling_state.get("last_email_subject")
@@ -742,5 +762,5 @@ def status():
 
 @app.get("/logs")
 def logs():
-    db_path = cfg["DATABASE_PATH"]
+    db_path = os.environ.get("DATABASE_PATH", "/tmp/availability.db")
     return get_last_processing_logs(db_path, limit=20)
