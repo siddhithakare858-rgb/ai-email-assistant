@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 from typing import Optional
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +31,20 @@ cfg = load_config()
 # Global polling status
 polling_active = False
 
-app = FastAPI(title="AI Email Scheduling Assistant (MVP)")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    init_db(cfg["DATABASE_PATH"])
+    global polling_active
+    polling_active = True
+    thread = threading.Thread(target=_poll_loop, daemon=True)
+    thread.start()
+    print("Polling loop started")
+    yield
+    # shutdown
+    polling_active = False
+
+app = FastAPI(title="AI Email Scheduling Assistant (MVP)", lifespan=lifespan)
 
 # Allow hackathon demo requests from any origin.
 app.add_middleware(
@@ -113,18 +127,6 @@ def summarize_latest_thread_messages(messages: list) -> str:
         trimmed = one_line[:250] + ("..." if len(one_line) > 250 else "")
         parts.append(f"{idx}. {trimmed}")
     return "Recent context:\n" + "\n".join(parts)
-
-@app.on_event("startup")
-def _startup():
-    init_db(cfg["DATABASE_PATH"])
-    global polling_thread, polling_active
-    with polling_state_lock:
-        if polling_thread is None or not polling_thread.is_alive():
-            polling_stop_event.clear()
-            polling_active = True
-            polling_thread = threading.Thread(target=_poll_loop, daemon=True)
-            polling_state["is_polling"] = True
-            polling_thread.start()
 
 
 def _poll_loop() -> None:
