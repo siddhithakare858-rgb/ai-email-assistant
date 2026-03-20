@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const API_BASE = 'https://ai-email-assistant-hhqz.onrender.com';
+const API_BASE = process.env.REACT_APP_API_URL;
 
 const COLORS = {
   bg: '#0a0a0f',
