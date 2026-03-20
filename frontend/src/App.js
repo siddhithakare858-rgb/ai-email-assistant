@@ -203,11 +203,13 @@ export default function App() {
                     type="email"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    className="w-full px-5 py-4 text-lg rounded-xl transition-all interactive-input"
+                    className="w-full px-4 py-3 text-base rounded-lg transition-all interactive-input"
                     style={{
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: 'white'
+                      background: 'white',
+                      border: '2px solid #6c63ff',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      color: '#0a0a0f'
                     }}
                     placeholder="you@gmail.com"
                     autoComplete="off"

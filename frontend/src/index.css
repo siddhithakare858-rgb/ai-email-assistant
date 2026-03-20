@@ -331,7 +331,7 @@ html, body, #root {
 }
 
 .interactive-input::placeholder {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: #666666 !important;
 }
 
 .interactive-button {
