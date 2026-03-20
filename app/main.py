@@ -17,10 +17,7 @@ from app.db.repository import (
     count_processed_today,
     get_availabilities_for_participants,
     get_last_email_subject,
-    get_last_processing_logs,
     get_participant_emails,
-    is_message_processed,
-    record_processed_email,
     upsert_participant_and_store_availability,
 )
 from app.email.gmail_client import GmailClient
@@ -29,6 +26,9 @@ from app.parsing.availability_parser import AvailabilityInterval, parse_availabi
 from app.scheduling.overlap_finder import find_overlapping_slots
 
 cfg = load_config()
+
+# Global polling status
+polling_active = False
 
 app = FastAPI(title="AI Email Scheduling Assistant (MVP)")
 
@@ -117,10 +117,11 @@ def summarize_latest_thread_messages(messages: list) -> str:
 @app.on_event("startup")
 def _startup():
     init_db(cfg["DATABASE_PATH"])
-    global polling_thread
+    global polling_thread, polling_active
     with polling_state_lock:
         if polling_thread is None or not polling_thread.is_alive():
             polling_stop_event.clear()
+            polling_active = True
             polling_thread = threading.Thread(target=_poll_loop, daemon=True)
             polling_state["is_polling"] = True
             polling_thread.start()
@@ -424,7 +425,7 @@ def health():
     return {
         "status": "ok",
         "gmail_connected": os.path.exists(token_path),
-        "polling_active": False,  # Could be updated if we implement polling
+        "polling_active": polling_active,
         "timestamp": datetime.utcnow().isoformat()
     }
 
