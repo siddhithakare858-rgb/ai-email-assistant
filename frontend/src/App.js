@@ -243,27 +243,29 @@ export default function App() {
           },
         }}
       />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      <div className="min-h-screen dashboard-page">
         {/* Header */}
-        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-4 shadow-sm">
+        <div className="dashboard-header">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Brain className="h-8 w-8 text-purple-600" />
+              <div className="gradient-icon-bg">
+                <Zap className="h-6 w-6 text-white" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">MailMind AI</h1>
-                <p className="text-sm text-slate-500 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <h1 className="text-2xl font-bold text-white">MailMind AI</h1>
+                <p className="text-sm text-gray-400 flex items-center gap-2">
+                  <span className="status-pill">
+                    <div className="green-dot"></div>
                     Agent Active
                   </span>
                   {isConnected && (
-                    <span className="text-purple-600 font-medium">
+                    <span className="text-purple-400 font-medium">
                       • {userEmail}
                     </span>
                   )}
                   <button
                     onClick={handleSwitchAccount}
-                    className="text-purple-600 hover:text-purple-700 text-sm font-medium transition-colors"
+                    className="text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors"
                   >
                     Switch account
                   </button>
@@ -279,47 +281,47 @@ export default function App() {
             
             {/* Stats Cards */}
             <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-2">
-                  <Mail className="h-5 w-5 text-slate-600" />
-                  <h3 className="text-lg font-semibold text-slate-900">Emails Processed</h3>
+              <div className="dashboard-card">
+                <div className="flex items-center gap-3 mb-4">
+                  <Mail className="h-5 w-5 text-purple-400" />
+                  <h3 className="text-lg font-semibold text-white">Emails Processed</h3>
                 </div>
-                <div className="text-3xl font-bold text-slate-900">0</div>
-                <p className="text-sm text-slate-500">Agent started recently</p>
+                <div className="stats-number">0</div>
+                <p className="stats-subtitle">Agent started recently</p>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-2">
-                  <Calendar className="h-5 w-5 text-slate-600" />
-                  <h3 className="text-lg font-semibold text-slate-900">Meetings Scheduled</h3>
+              <div className="dashboard-card">
+                <div className="flex items-center gap-3 mb-4">
+                  <Calendar className="h-5 w-5 text-purple-400" />
+                  <h3 className="text-lg font-semibold text-white">Meetings Scheduled</h3>
                 </div>
-                <div className="text-3xl font-bold text-slate-900">0</div>
-                <p className="text-sm text-slate-500">This week</p>
+                <div className="stats-number">0</div>
+                <p className="stats-subtitle">This week</p>
               </div>
             </div>
 
             {/* Main Panel */}
             <div className="lg:col-span-2 space-y-6">
               {/* Schedule Meeting Form */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-3">
-                  <Calendar className="h-6 w-6 text-purple-600" />
+              <div className="dashboard-card">
+                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-3">
+                  <Calendar className="h-6 w-6 text-purple-400" />
                   Schedule New Meeting
                 </h2>
                 
                 <form onSubmit={onSchedule} className="space-y-6">
                   <div>
-                    <label className="block text-base font-semibold text-slate-900 mb-3">
-                      <Mail className="inline h-5 w-5 mr-2 text-purple-600" />
+                    <label className="block text-base font-semibold text-white mb-3">
+                      <Mail className="inline h-5 w-5 mr-2 text-purple-400" />
                       Email Message IDs
-                      <span className="ml-3 text-sm font-normal text-slate-500">
+                      <span className="ml-3 text-sm font-normal text-gray-400">
                         (2-3 IDs, comma or space separated)
                       </span>
                     </label>
                     <textarea
                       value={messageIdsInput}
                       onChange={(e) => setMessageIdsInput(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-5 py-4 text-base text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none shadow-sm"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all resize-none"
                       placeholder="185c1b2f3a4b5c6d&#10;185c1b2f3a4b5c6e&#10;185c1b2f3a4b5c6f"
                       rows={4}
                       autoComplete="off"
@@ -327,39 +329,39 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-base font-semibold text-slate-900 mb-3">
-                      <Users className="inline h-5 w-5 mr-2 text-purple-600" />
+                    <label className="block text-base font-semibold text-white mb-3">
+                      <Users className="inline h-5 w-5 mr-2 text-purple-400" />
                       Your Email
                     </label>
                     <input
                       value={userEmail}
                       readOnly
-                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-5 py-4 text-base text-slate-900 outline-none ring-0 placeholder:text-slate-400 cursor-not-allowed"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 cursor-not-allowed"
                       placeholder={userEmail}
                     />
                   </div>
 
                   <div className="grid gap-6 sm:grid-cols-2">
                     <div>
-                      <label className="block text-base font-semibold text-slate-900 mb-3">
+                      <label className="block text-base font-semibold text-white mb-3">
                         Meeting Title
                       </label>
                       <input
                         value={meetingTitle}
                         onChange={(e) => setMeetingTitle(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-5 py-4 text-base text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-sm"
+                        className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                         placeholder="Team Meeting"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-base font-semibold text-slate-900 mb-3">
+                      <label className="block text-base font-semibold text-white mb-3">
                         Description (Optional)
                       </label>
                       <input
                         value={meetingDescription}
                         onChange={(e) => setMeetingDescription(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-5 py-4 text-base text-slate-900 outline-none ring-0 placeholder:text-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-sm"
+                        className="w-full rounded-xl border border-gray-600 bg-gray-800 px-5 py-4 text-base text-white outline-none ring-0 placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                         placeholder="Weekly sync to discuss project updates"
                       />
                     </div>
@@ -371,8 +373,8 @@ export default function App() {
                     className={clsx(
                       "w-full inline-flex items-center justify-center gap-3 rounded-xl px-8 py-5 text-base font-semibold text-white shadow-xl transition-all transform",
                       loading
-                        ? "bg-slate-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 hover:scale-[1.02] active:scale-[0.98]"
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "purple-button"
                     )}
                   >
                     {loading ? (
@@ -390,12 +392,12 @@ export default function App() {
                 </form>
 
                 {error ? (
-                  <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-6" role="alert">
+                  <div className="mt-6 rounded-xl border border-rose-500/50 bg-rose-500/10 p-6" role="alert">
                     <div className="flex items-start gap-4">
-                      <AlertCircle className="h-6 w-6 text-rose-500 flex-shrink-0 mt-1" />
+                      <AlertCircle className="h-6 w-6 text-rose-400 flex-shrink-0 mt-1" />
                       <div>
-                        <div className="text-base font-semibold text-rose-900">Something went wrong</div>
-                        <div className="mt-2 text-base text-rose-700">{error}</div>
+                        <div className="text-base font-semibold text-rose-200">Something went wrong</div>
+                        <div className="mt-2 text-base text-rose-100">{error}</div>
                       </div>
                     </div>
                   </div>
@@ -403,42 +405,47 @@ export default function App() {
               </div>
 
               {/* How It Works Section */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-3">
-                  <Shield className="h-6 w-6 text-purple-600" />
+              <div className="dashboard-card">
+                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-3">
+                  <Shield className="h-6 w-6 text-purple-400" />
                   How it works
                 </h2>
                 
                 <div className="space-y-4">
-                  <div className="flex gap-4 p-4 bg-slate-50 rounded-lg">
-                    <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
-                      1
-                    </div>
+                  <div className="flex gap-4 p-4 step-card">
+                    <div className="step-badge">1</div>
                     <div>
-                      <h3 className="font-semibold text-slate-900 mb-2">Someone emails you asking to meet</h3>
-                      <p className="text-slate-600">Forward scheduling emails to your MailMind AI assistant</p>
+                      <h3 className="font-semibold text-white mb-2">Someone emails you asking to meet</h3>
+                      <p className="text-gray-400">Forward scheduling emails to your MailMind AI assistant</p>
                     </div>
                   </div>
 
-                  <div className="flex gap-4 p-4 bg-slate-50 rounded-lg">
-                    <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
-                      2
-                    </div>
+                  <div className="flex gap-4 p-4 step-card">
+                    <div className="step-badge">2</div>
                     <div>
-                      <h3 className="font-semibold text-slate-900 mb-2">MailMind AI reads and parses their availability</h3>
-                      <p className="text-slate-600">Advanced AI extracts time slots and preferences from natural language</p>
+                      <h3 className="font-semibold text-white mb-2">MailMind AI reads and parses their availability</h3>
+                      <p className="text-gray-400">Advanced AI extracts time slots and preferences from natural language</p>
                     </div>
                   </div>
 
-                  <div className="flex gap-4 p-4 bg-slate-50 rounded-lg">
-                    <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-lg">
-                      3
-                    </div>
+                  <div className="flex gap-4 p-4 step-card">
+                    <div className="step-badge">3</div>
                     <div>
-                      <h3 className="font-semibold text-slate-900 mb-2">Meeting scheduled, calendar invite sent automatically</h3>
-                      <p className="text-slate-600">Calendar events created and invites sent to all participants</p>
+                      <h3 className="font-semibold text-white mb-2">Meeting scheduled, calendar invite sent automatically</h3>
+                      <p className="text-gray-400">Calendar events created and invites sent to all participants</p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Live Activity Feed */}
+              <div className="activity-monitor">
+                <div className="flex justify-center mb-4">
+                  <div className="green-dot"></div>
+                  <span className="monitor-text">Agent is monitoring your inbox...</span>
+                </div>
+                <div className="text-center text-gray-500 text-sm">
+                  Processed emails will appear here
                 </div>
               </div>
 
