@@ -34,7 +34,8 @@ polling_active = False
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    init_db(cfg["DATABASE_PATH"])
+    db_path = os.environ.get("DATABASE_PATH", "/tmp/availability.db")
+    init_db(db_path)
     global polling_active
     polling_active = True
     thread = threading.Thread(target=_poll_loop, daemon=True)
@@ -147,16 +148,6 @@ def get_last_processing_logs(db_path, limit=20):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT,
-                subject TEXT,
-                processed_at TEXT,
-                action_taken TEXT,
-                status TEXT
-            )
-        """)
-        cursor.execute("""
             SELECT message_id, subject, processed_at, action_taken, status 
             FROM processed_emails 
             ORDER BY processed_at DESC 
@@ -186,17 +177,6 @@ def record_processed_email(db_path, message_id, subject, action_taken, status, d
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message_id TEXT UNIQUE,
-                subject TEXT,
-                processed_at TEXT,
-                action_taken TEXT,
-                status TEXT,
-                details TEXT
-            )
-        """)
-        cursor.execute("""
             INSERT OR IGNORE INTO processed_emails 
             (message_id, subject, processed_at, action_taken, status, details)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -207,12 +187,14 @@ def record_processed_email(db_path, message_id, subject, action_taken, status, d
         print(f"Error recording email: {e}")
 
 
-def is_message_processed(db_path, message_id):
-    """Check if a message has already been processed."""
+def init_database(db_path):
+    """Initialize database tables once at startup."""
     import sqlite3
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
+        
+        # Create processed_emails table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS processed_emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,10 +202,37 @@ def is_message_processed(db_path, message_id):
                 subject TEXT,
                 processed_at TEXT,
                 action_taken TEXT,
-                status TEXT
+                status TEXT,
+                details TEXT
             )
         """)
+        
+        # Create processing_logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS processing_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logged_at TEXT,
+                message_id TEXT,
+                subject TEXT,
+                action_taken TEXT,
+                status TEXT,
+                details TEXT
+            )
+        """)
+        
         conn.commit()
+        conn.close()
+        print(f"Database initialized at: {db_path}")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+
+
+def is_message_processed(db_path, message_id):
+    """Check if a message has already been processed."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
         cursor.execute(
             "SELECT id FROM processed_emails WHERE message_id = ?", 
             (message_id,)
@@ -231,9 +240,10 @@ def is_message_processed(db_path, message_id):
         result = cursor.fetchone()
         conn.close()
         if result is not None:
-            print(f"Message {message_id} already processed - skipping")
+            print(f"Skipping already processed: {message_id}")
         return result is not None
     except Exception as e:
+        print(f"Error checking if message processed: {e}")
         return False
 
 
@@ -283,7 +293,11 @@ def _poll_loop() -> None:
 
             # Get messages from last 24 hours (not just unread)
             message_ids = gmail.list_messages(max_results=10)
-            print(f"Found {len(message_ids)} messages to check")
+            print(f"Polling tick - checking {len(message_ids)} emails, DB: {db_path}")
+            
+            # Track processed vs skipped emails
+            processed_count = 0
+            skipped_count = 0
             
         except Exception as e:
             print(f"ERROR in polling loop: {e}")
@@ -303,8 +317,10 @@ def _poll_loop() -> None:
 
             try:
                 if is_message_processed(db_path, message_id):
+                    skipped_count += 1
                     continue
 
+                processed_count += 1
                 original = gmail.get_message_full(message_id)
                 subject = original.subject
                 full_text = f"{original.subject}\n{original.from_email}\n{original.body_text}"
@@ -529,6 +545,9 @@ def _poll_loop() -> None:
                     )
                 except Exception:
                     pass
+
+        # Print summary of this polling tick
+        print(f"Polling tick complete - processed: {processed_count}, skipped: {skipped_count}")
 
         time.sleep(60)
 
